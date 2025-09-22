@@ -40,7 +40,7 @@ Você precisa de uma extensão no seu navegador para gerenciar UserScripts. A ma
 
 1.  Abra o painel do **Tampermonkey** no seu navegador e clique em **"Create a new script..."**.
 2.  Apague todo o código de exemplo.
-3.  Copie o código completo do arquivo `script.js` deste repositório.
+3.  Copie o código completo do arquivo `bypass.js` deste repositório.
 4.  Cole o código na tela do Tampermonkey.
 5.  Salve o script (`Ctrl + S`).
 
