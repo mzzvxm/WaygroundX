@@ -1,4 +1,4 @@
-# 🚀 Wayground (Quizziz) Bypass\</h1\>
+# 🚀 Wayground (Quizziz) Bypass
 
 ## 👨‍💻 Autor
 
