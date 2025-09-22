@@ -1,7 +1,4 @@
-\<div align="center"\>
-\<img src="[https://i.imgur.com/gAv2y3c.png](https://www.google.com/search?q=https://i.imgur.com/gAv2y3c.png)" alt="Logo" width="150"\>
-\<h1\>🚀 Wayground (Quizziz) Bypass\</h1\>
-\</div\>
+# 🚀 Wayground (Quizziz) Bypass\</h1\>
 
 ## 👨‍💻 Autor
 
