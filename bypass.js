@@ -414,7 +414,7 @@
         panel.id = 'mzzvxm-floating-panel';
         Object.assign(panel.style, {
             position: 'fixed',
-            bottom: '20px',
+            bottom: '60px',
             right: '20px',
             zIndex: '9999',
             display: 'flex',
