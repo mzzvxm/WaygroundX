@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      30.0
-// @description  Resolve questões do Quizizz com UI moderna, marca d'água e suporte a múltiplas chaves de API.
+// @version      33.0
+// @description  Resolve questões do Quizizz
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
 // @match        https://wayground.com/join/game/*
@@ -13,7 +13,6 @@
 
     // -----------------------------------------------------------------------------------
     // IMPORTANTE: LISTA DE CHAVES DE API
-    // Preencha com até 3 chaves. O script tentará a próxima se a atual falhar.
     // -----------------------------------------------------------------------------------
     const GEMINI_API_KEYS = [
         "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc",   // Chave 1
@@ -21,6 +20,7 @@
         "AIzaSyD2MWKShsFUhgjlh9TO-Ob9j7sRVVhCW0I"  // Chave 3
     ];
     let currentApiKeyIndex = 0;
+    let lastAiResponse = '';
     // -----------------------------------------------------------------------------------
 
     function waitForElement(selector, all = false, timeout = 5000) {
@@ -49,6 +49,10 @@
                 const mathElement = el.querySelector('annotation[encoding="application/x-tex"]');
                 return mathElement ? mathElement.textContent.trim() : el.querySelector('#optionText')?.innerText.trim() || '';
             };
+            const equationEditor = document.querySelector('div[data-cy="equation-editor"]');
+            if (equationEditor) {
+                return { questionText, questionImageUrl, questionType: 'equation' };
+            }
             const droppableBlanks = document.querySelectorAll('button.droppable-blank');
             const dragOptions = document.querySelectorAll('.drag-option');
             if (droppableBlanks.length > 1 && dragOptions.length > 0) {
@@ -73,10 +77,6 @@
             if (droppableBlanks.length === 1 && dragOptions.length > 0) {
                  const draggableOptions = Array.from(dragOptions).map(el => ({ text: el.querySelector('.dnd-option-text')?.innerText.trim() || '', element: el }));
                 return { questionText, questionImageUrl, questionType: 'drag_into_blank', draggableOptions, dropZone: { element: droppableBlanks[0] } };
-            }
-            const equationEditor = document.querySelector('div[data-cy="equation-editor"]');
-            if (equationEditor) {
-                return { questionText, questionImageUrl, questionType: 'equation' };
             }
             const dropdownButton = document.querySelector('button.options-dropdown');
             if (dropdownButton) {
@@ -110,15 +110,16 @@
     }
 
     async function obterRespostaDaIA(quizData) {
+        lastAiResponse = '';
+        const viewResponseBtn = document.getElementById('view-raw-response-btn');
+        if (viewResponseBtn) viewResponseBtn.style.display = 'none';
         for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
             const currentKey = GEMINI_API_KEYS[currentApiKeyIndex];
-
             if (!currentKey || currentKey.includes("SUA_") || currentKey.length < 30) {
                 console.warn(`Chave de API #${currentApiKeyIndex + 1} parece ser um placeholder. Pulando...`);
                 currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
                 continue;
             }
-
             const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${currentKey}`;
             let promptDeInstrucao = "", formattedOptions = "";
             switch (quizData.questionType) {
@@ -154,13 +155,16 @@
                     const aiResponseText = data.candidates[0].content.parts[0].text;
                     console.log(`Sucesso com a Chave API #${currentApiKeyIndex + 1}.`);
                     console.log("Resposta bruta da IA:", aiResponseText);
+                    lastAiResponse = aiResponseText;
                     return aiResponseText;
                 }
                 const errorData = await response.json();
                 const errorMessage = errorData.error?.message || `Erro ${response.status}`;
                 console.warn(`Chave API #${currentApiKeyIndex + 1} falhou: ${errorMessage}. Tentando a próxima...`);
+                lastAiResponse = `Falha na Chave #${currentApiKeyIndex + 1}: ${errorMessage}`;
             } catch (error) {
                 console.warn(`Erro na requisição com a Chave API #${currentApiKeyIndex + 1}: ${error.message}. Tentando a próxima...`);
+                lastAiResponse = `Falha na Chave #${currentApiKeyIndex + 1}: ${error.message}`;
             }
             currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
         }
@@ -220,6 +224,14 @@
                 };
                 let answerSequence = aiAnswerText.trim().replace(/\s/g, '').replace(/<=/g, '≤').replace(/>=/g, '≥');
                 console.log(`Digitando a resposta: ${answerSequence}`);
+                const editor = document.querySelector('div[data-cy="equation-editor"]');
+                if (editor) {
+                    editor.click();
+                    await new Promise(r => setTimeout(r, 100));
+                } else {
+                    console.error("Não foi possível encontrar o editor de equação para focar.");
+                    return;
+                }
                 for (const char of answerSequence) {
                     const iconClass = KEYPAD_MAP[char.toLowerCase()];
                     if (iconClass) {
@@ -363,7 +375,7 @@
                     document.body.click();
                 }
             } else {
-                const isMath = quizData.options && quizData.options.length > 0 && quizData.options[0].text.includes('\\');
+                const isMath = quizData.options && quizData.options.length > 0 && (quizData.options[0].text.includes('\\') || quizData.questionText.toLowerCase().includes('value of'));
                 const matchValue = quizData.questionText.match(/value of ([\d.]+)/i);
                 if (isMath && matchValue) {
                     console.log("Questão de matemática detectada. Resolvendo localmente...");
@@ -393,6 +405,10 @@
             console.error("Um erro inesperado ocorreu no fluxo principal:", error);
             alert("Ocorreu um erro geral. Verifique o console para detalhes.");
         } finally {
+            const viewResponseBtn = document.getElementById('view-raw-response-btn');
+            if (viewResponseBtn && lastAiResponse) {
+                viewResponseBtn.style.display = 'block';
+            }
             button.disabled = false;
             button.innerText = "✨ Resolver";
             button.style.transform = 'scale(1)';
@@ -405,43 +421,61 @@
         const panel = document.createElement('div');
         panel.id = 'mzzvxm-floating-panel';
         Object.assign(panel.style, {
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            zIndex: '2147483647',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: '10px',
-            padding: '12px',
-            backgroundColor: 'rgba(26, 27, 30, 0.7)',
-            backdropFilter: 'blur(8px)',
-            webkitBackdropFilter: 'blur(8px)',
-            borderRadius: '16px',
+            position: 'fixed', bottom: '60px', right: '20px', zIndex: '2147483647',
+            display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+            gap: '10px', padding: '12px', backgroundColor: 'rgba(26, 27, 30, 0.7)',
+            backdropFilter: 'blur(8px)', webkitBackdropFilter: 'blur(8px)', borderRadius: '16px',
             boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
             transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
-            transform: 'translateY(20px)',
-            opacity: '0'
+            transform: 'translateY(20px)', opacity: '0'
         });
+
+        const responseViewer = document.createElement('div');
+        responseViewer.id = 'ai-response-viewer';
+        Object.assign(responseViewer.style, {
+            display: 'none', position: 'absolute', bottom: 'calc(100% + 10px)', right: '0',
+            width: '300px', maxHeight: '200px', overflowY: 'auto',
+            background: 'rgba(10, 10, 15, 0.9)', backdropFilter: 'blur(5px)',
+            borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '12px', color: '#f0f0f0', fontSize: '12px',
+            fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
+            textAlign: 'left'
+        });
+        panel.appendChild(responseViewer);
+
+        const viewResponseBtn = document.createElement('button');
+        viewResponseBtn.id = 'view-raw-response-btn';
+        viewResponseBtn.innerText = 'Ver Resposta da IA';
+        Object.assign(viewResponseBtn.style, {
+            background: 'none', border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: 'rgba(255, 255, 255, 0.6)', cursor: 'pointer',
+            fontSize: '11px', padding: '4px 8px', borderRadius: '6px',
+            display: 'none', transition: 'all 0.2s ease',
+            marginBottom: '4px'
+        });
+        viewResponseBtn.addEventListener('click', () => {
+            if (responseViewer.style.display === 'block') {
+                responseViewer.style.display = 'none';
+            } else {
+                responseViewer.innerText = lastAiResponse || "Nenhuma resposta da IA foi recebida ainda.";
+                responseViewer.style.display = 'block';
+            }
+        });
+        panel.appendChild(viewResponseBtn);
+
+        panel.style.setProperty('bottom', '60px', 'important');
+
         const button = document.createElement('button');
         button.id = 'ai-solver-button';
         button.innerHTML = '✨ Resolver';
         Object.assign(button.style, {
             background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
-            border: 'none',
-            borderRadius: '10px',
-            color: 'white',
-            cursor: 'pointer',
-            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            fontSize: '15px',
-            fontWeight: '600',
-            padding: '10px 20px',
-            boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)',
-            transition: 'all 0.2s ease',
-            letterSpacing: '0.5px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            border: 'none', borderRadius: '10px', color: 'white', cursor: 'pointer',
+            fontFamily: 'system-ui, sans-serif', fontSize: '15px', fontWeight: '600',
+            padding: '10px 20px', boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)',
+            transition: 'all 0.2s ease', letterSpacing: '0.5px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
         });
         button.addEventListener('mouseover', () => { button.style.transform = 'translateY(-2px)'; button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)'; });
         button.addEventListener('mouseout', () => { button.style.transform = 'translateY(0)'; button.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.2)'; });
@@ -449,11 +483,12 @@
         button.addEventListener('mouseup', () => { button.style.transform = 'translateY(-2px)'; button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)'; });
         button.addEventListener('click', resolverQuestao);
         panel.appendChild(button);
+
         const watermark = document.createElement('div');
         const githubIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 3c-.58.0-1.25.27-2 1.5c-2.2.86-4.5 1.3-7 1.3-2.5 0-4.7-.44-7-1.3-.75-1.23-1.42-1.5-2-1.5A5.07 5.07 0 0 0 4 4.77 5.44 5.44 0 0 0 2 10.71c0 6.13 3.49 7.34 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
         const instagramIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`;
         watermark.innerHTML = `
-            <div style="display: flex; gap: 8px; align-items: center; color: rgba(255,255,255,0.7);">
+            <div style="display: flex; gap: 8px; align-items: center; color: rgba(255,255,255,0.7); margin-top: 8px; justify-content: flex-end;">
                 <span style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; font-weight: 400;">@mzzvxm</span>
                 <a href="https://github.com/mzzvxm" target="_blank" title="GitHub" style="line-height: 0; color: inherit; transition: color 0.2s ease;">${githubIcon}</a>
                 <a href="https://instagram.com/mzzvxm" target="_blank" title="Instagram" style="line-height: 0; color: inherit; transition: color 0.2s ease;">${instagramIcon}</a>
@@ -465,18 +500,19 @@
         });
         panel.appendChild(watermark);
         document.body.appendChild(panel);
+
         setTimeout(() => {
             panel.style.transform = 'translateY(0)';
             panel.style.opacity = '1';
         }, 100);
-        console.log("Floating Panel do resolvedor v29 criado com sucesso!");
+        console.log("Floating Panel do resolvedor v32 criado com sucesso!");
     }
 
     async function fetchWithTimeout(resource, options = {}, timeout = 15000) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
-            const response = await fetch(resource, { ...options, signal: controller.signal });
+            const response = await fetch(resource, { ...options, signal: controll/er.signal });
             clearTimeout(id);
             return response;
         } catch (error) {
