@@ -432,6 +432,8 @@
             opacity: '0'
         });
 
+        panel.style.setProperty('bottom', '60px', 'important');
+
         // Botão "Resolver"
         const button = document.createElement('button');
         button.id = 'ai-solver-button';
