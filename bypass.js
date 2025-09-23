@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Wayground (Quizizz) Bypass
-// @version      28.0
-// @description  Resolve questões do Quizizz Wayground
+// @name         Quizizz Bypass
+// @version      30.0
+// @description  Resolve questões do Quizizz com UI moderna, marca d'água e suporte a múltiplas chaves de API.
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
 // @match        https://wayground.com/join/game/*
@@ -12,9 +12,15 @@
     'use strict';
 
     // -----------------------------------------------------------------------------------
-    // IMPORTANTE: CHAVE DE API
+    // IMPORTANTE: LISTA DE CHAVES DE API
+    // Preencha com até 3 chaves. O script tentará a próxima se a atual falhar.
     // -----------------------------------------------------------------------------------
-    const GEMINI_API_KEY = "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc";
+    const GEMINI_API_KEYS = [
+        "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc",   // Chave 1
+        "AIzaSyB1Zg2ZIwXhRXIcOes_eZSsXJttDTFgK2Q",  // Chave 2
+        "AIzaSyD2MWKShsFUhgjlh9TO-Ob9j7sRVVhCW0I"  // Chave 3
+    ];
+    let currentApiKeyIndex = 0;
     // -----------------------------------------------------------------------------------
 
     function waitForElement(selector, all = false, timeout = 5000) {
@@ -104,74 +110,62 @@
     }
 
     async function obterRespostaDaIA(quizData) {
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-        let promptDeInstrucao = "", formattedOptions = "";
-        switch (quizData.questionType) {
-            case 'multi_drag_into_blank':
-                promptDeInstrucao = `Esta é uma questão de combinar múltiplas sentenças com suas expressões corretas. Responda com os pares no formato EXATO: 'Sentença da pergunta -> Expressão da opção', com cada par em uma nova linha.`;
-                const prompts = quizData.dropZones.map(item => `- "${item.prompt}"`).join('\n');
-                const options = quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n');
-                formattedOptions = `Sentenças:\n${prompts}\n\nExpressões (Opções):\n${options}`;
-                break;
-            case 'equation':
-                promptDeInstrucao = `Resolva a seguinte equação ou inequação. Forneça apenas a expressão final simplificada (ex: x = 5, ou y > 3).`;
-                formattedOptions = `EQUAÇÃO: "${quizData.questionText}"`;
-                break;
-            case 'dropdown':
-            case 'single_choice':
-                promptDeInstrucao = `Responda APENAS com o texto exato da ÚNICA alternativa correta.`;
-                formattedOptions = "OPÇÕES:\n" + quizData.options.map(opt => `- "${opt.text}"`).join('\n');
-                break;
-            case 'reorder':
-                promptDeInstrucao = `A tarefa é: "${quizData.questionText}". Forneça a ordem correta listando os textos dos itens, um por linha, do primeiro ao último.`;
-                formattedOptions = "Itens para ordenar:\n" + quizData.draggableItems.map(item => `- "${item.text}"`).join('\n');
-                break;
-            case 'drag_into_blank':
-                promptDeInstrucao = `Responda APENAS com o texto da ÚNICA opção correta que preenche a lacuna.`;
-                formattedOptions = "Opções para arrastar:\n" + quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n');
-                break;
-            case 'match_order':
-                promptDeInstrucao = `Responda com os pares no formato EXATO: 'Texto do Local para Soltar -> Texto do Item para Arrastar', com cada par em uma nova linha.`;
-                const draggables = quizData.draggableItems.map(item => `- "${item.text}"`).join('\n');
-                const droppables = quizData.dropZones.map(item => `- "${item.text}"`).join('\n');
-                formattedOptions = `Itens para Arrastar:\n${draggables}\n\nLocais para Soltar:\n${droppables}`;
-                break;
-            case 'open_ended':
-                promptDeInstrucao = `Responda APENAS com a palavra ou frase curta que preenche a lacuna.`;
-                break;
-            case 'multiple_choice':
-                promptDeInstrucao = `Responda APENAS com os textos exatos de TODAS as alternativas corretas, separando cada uma em uma NOVA LINHA.`;
-                formattedOptions = "OPÇÕES:\n" + quizData.options.map(opt => `- "${opt.text}"`).join('\n');
-                break;
-        }
-        const textPrompt = `${promptDeInstrucao}\n\n---\nPERGUNTA: "${quizData.questionText}"\n---\n${formattedOptions}`;
-        let promptParts = [{ text: textPrompt }];
-        if (quizData.questionImageUrl) {
-            const base64Image = await imageUrlToBase64(quizData.questionImageUrl);
-            if (base64Image) {
-                const [header, data] = base64Image.split(',');
-                let mimeType = header.match(/:(.*?);/)[1];
-                const supportedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-                if (!supportedMimeTypes.includes(mimeType)) mimeType = 'image/jpeg';
-                promptParts.push({ inline_data: { mime_type: mimeType, data: data } });
+        for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+            const currentKey = GEMINI_API_KEYS[currentApiKeyIndex];
+
+            if (!currentKey || currentKey.includes("SUA_") || currentKey.length < 30) {
+                console.warn(`Chave de API #${currentApiKeyIndex + 1} parece ser um placeholder. Pulando...`);
+                currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
+                continue;
             }
+
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${currentKey}`;
+            let promptDeInstrucao = "", formattedOptions = "";
+            switch (quizData.questionType) {
+                 case 'multi_drag_into_blank': promptDeInstrucao = `Esta é uma questão de combinar múltiplas sentenças com suas expressões corretas. Responda com os pares no formato EXATO: 'Sentença da pergunta -> Expressão da opção', com cada par em uma nova linha.`; const prompts = quizData.dropZones.map(item => `- "${item.prompt}"`).join('\n'); const options = quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n'); formattedOptions = `Sentenças:\n${prompts}\n\nExpressões (Opções):\n${options}`; break;
+                case 'equation': promptDeInstrucao = `Resolva a seguinte equação ou inequação. Forneça apenas a expressão final simplificada (ex: x = 5, ou y > 3).`; formattedOptions = `EQUAÇÃO: "${quizData.questionText}"`; break;
+                case 'dropdown': case 'single_choice': promptDeInstrucao = `Responda APENAS com o texto exato da ÚNICA alternativa correta.`; formattedOptions = "OPÇÕES:\n" + quizData.options.map(opt => `- "${opt.text}"`).join('\n'); break;
+                case 'reorder': promptDeInstrucao = `A tarefa é: "${quizData.questionText}". Forneça a ordem correta listando os textos dos itens, um por linha, do primeiro ao último.`; formattedOptions = "Itens para ordenar:\n" + quizData.draggableItems.map(item => `- "${item.text}"`).join('\n'); break;
+                case 'drag_into_blank': promptDeInstrucao = `Responda APENAS com o texto da ÚNICA opção correta que preenche a lacuna.`; formattedOptions = "Opções para arrastar:\n" + quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n'); break;
+                case 'match_order': promptDeInstrucao = `Responda com os pares no formato EXATO: 'Texto do Local para Soltar -> Texto do Item para Arrastar', com cada par em uma nova linha.`; const draggables = quizData.draggableItems.map(item => `- "${item.text}"`).join('\n'); const droppables = quizData.dropZones.map(item => `- "${item.text}"`).join('\n'); formattedOptions = `Itens para Arrastar:\n${draggables}\n\nLocais para Soltar:\n${droppables}`; break;
+                case 'open_ended': promptDeInstrucao = `Responda APENAS com a palavra ou frase curta que preenche a lacuna.`; break;
+                case 'multiple_choice': promptDeInstrucao = `Responda APENAS com os textos exatos de TODAS as alternativas corretas, separando cada uma em uma NOVA LINHA.`; formattedOptions = "OPÇÕES:\n" + quizData.options.map(opt => `- "${opt.text}"`).join('\n'); break;
+            }
+            const textPrompt = `${promptDeInstrucao}\n\n---\nPERGUNTA: "${quizData.questionText}"\n---\n${formattedOptions}`;
+            let promptParts = [{ text: textPrompt }];
+            if (quizData.questionImageUrl) {
+                const base64Image = await imageUrlToBase64(quizData.questionImageUrl);
+                if (base64Image) {
+                    const [header, data] = base64Image.split(',');
+                    let mimeType = header.match(/:(.*?);/)[1];
+                    const supportedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+                    if (!supportedMimeTypes.includes(mimeType)) mimeType = 'image/jpeg';
+                    promptParts.push({ inline_data: { mime_type: mimeType, data: data } });
+                }
+            }
+            try {
+                const response = await fetchWithTimeout(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: promptParts }] })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const aiResponseText = data.candidates[0].content.parts[0].text;
+                    console.log(`Sucesso com a Chave API #${currentApiKeyIndex + 1}.`);
+                    console.log("Resposta bruta da IA:", aiResponseText);
+                    return aiResponseText;
+                }
+                const errorData = await response.json();
+                const errorMessage = errorData.error?.message || `Erro ${response.status}`;
+                console.warn(`Chave API #${currentApiKeyIndex + 1} falhou: ${errorMessage}. Tentando a próxima...`);
+            } catch (error) {
+                console.warn(`Erro na requisição com a Chave API #${currentApiKeyIndex + 1}: ${error.message}. Tentando a próxima...`);
+            }
+            currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
         }
-        try {
-            const response = await fetchWithTimeout(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: promptParts }] })
-            });
-            if (!response.ok) throw new Error(`Erro na API: ${response.statusText} - ${JSON.stringify(await response.json())}`);
-            const data = await response.json();
-            const aiResponseText = data.candidates[0].content.parts[0].text;
-            console.log("Resposta bruta da IA:", aiResponseText);
-            return aiResponseText;
-        } catch (error) {
-            console.error("Erro ao chamar a API do Gemini:", error);
-            alert(`Ocorreu um erro ao comunicar com a IA: ${error.message}`);
-            return null;
-        }
+        alert("Todas as chaves de API falharam. Verifique suas chaves e cotas no Google AI Studio.");
+        return null;
     }
 
     async function performAction(aiAnswerText, quizData) {
@@ -337,9 +331,8 @@
         const button = document.getElementById('ai-solver-button');
         button.disabled = true;
         button.innerText = "Pensando...";
-        button.style.transform = 'scale(0.95)'; // Animação de clique
-        button.style.boxShadow = '0 0 0 rgba(0,0,0,0)'; // Remove sombra ao clicar
-
+        button.style.transform = 'scale(0.95)';
+        button.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
         try {
             const quizData = await extrairDadosDaQuestao();
             if (!quizData) {
@@ -403,43 +396,38 @@
             button.disabled = false;
             button.innerText = "✨ Resolver";
             button.style.transform = 'scale(1)';
-            button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)'; // Restaura sombra
+            button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
         }
     }
 
     function criarFloatingPanel() {
         if (document.getElementById('mzzvxm-floating-panel')) return;
-
         const panel = document.createElement('div');
         panel.id = 'mzzvxm-floating-panel';
         Object.assign(panel.style, {
             position: 'fixed',
-            bottom: '60px',
+            bottom: '20px',
             right: '20px',
-            zIndex: '9999',
+            zIndex: '2147483647',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
             gap: '10px',
             padding: '12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.4)', // Fundo semi-transparente
-            backdropFilter: 'blur(8px)', // Efeito de vidro
-            webkitBackdropFilter: 'blur(8px)', // Compatibilidade Safari
+            backgroundColor: 'rgba(26, 27, 30, 0.7)',
+            backdropFilter: 'blur(8px)',
+            webkitBackdropFilter: 'blur(8px)',
             borderRadius: '16px',
             boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
             transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
-            transform: 'translateY(20px)', // Começa um pouco abaixo
+            transform: 'translateY(20px)',
             opacity: '0'
         });
-
-        panel.style.setProperty('bottom', '60px', 'important');
-
-        // Botão "Resolver"
         const button = document.createElement('button');
         button.id = 'ai-solver-button';
-        button.innerText = '✨ Resolver';
+        button.innerHTML = '✨ Resolver';
         Object.assign(button.style, {
-            background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', // Gradiente roxo suave
+            background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
             border: 'none',
             borderRadius: '10px',
             color: 'white',
@@ -455,31 +443,15 @@
             alignItems: 'center',
             gap: '8px'
         });
-
-        button.addEventListener('mouseover', () => {
-            button.style.transform = 'translateY(-2px)';
-            button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)';
-        });
-        button.addEventListener('mouseout', () => {
-            button.style.transform = 'translateY(0)';
-            button.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.2)';
-        });
-        button.addEventListener('mousedown', () => {
-            button.style.transform = 'translateY(1px)';
-            button.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.15)';
-        });
-        button.addEventListener('mouseup', () => {
-            button.style.transform = 'translateY(-2px)'; // Volta ao estado de hover se o mouse ainda estiver em cima
-            button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)';
-        });
+        button.addEventListener('mouseover', () => { button.style.transform = 'translateY(-2px)'; button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)'; });
+        button.addEventListener('mouseout', () => { button.style.transform = 'translateY(0)'; button.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.2)'; });
+        button.addEventListener('mousedown', () => { button.style.transform = 'translateY(1px)'; button.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.15)'; });
+        button.addEventListener('mouseup', () => { button.style.transform = 'translateY(-2px)'; button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)'; });
         button.addEventListener('click', resolverQuestao);
         panel.appendChild(button);
-
-        // Marca d'água
         const watermark = document.createElement('div');
         const githubIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 3c-.58.0-1.25.27-2 1.5c-2.2.86-4.5 1.3-7 1.3-2.5 0-4.7-.44-7-1.3-.75-1.23-1.42-1.5-2-1.5A5.07 5.07 0 0 0 4 4.77 5.44 5.44 0 0 0 2 10.71c0 6.13 3.49 7.34 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
         const instagramIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`;
-
         watermark.innerHTML = `
             <div style="display: flex; gap: 8px; align-items: center; color: rgba(255,255,255,0.7);">
                 <span style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; font-weight: 400;">@mzzvxm</span>
@@ -487,21 +459,17 @@
                 <a href="https://instagram.com/mzzvxm" target="_blank" title="Instagram" style="line-height: 0; color: inherit; transition: color 0.2s ease;">${instagramIcon}</a>
             </div>
         `;
-        // Efeito de hover para os ícones
         watermark.querySelectorAll('a').forEach(link => {
             link.addEventListener('mouseover', () => link.style.color = 'white');
             link.addEventListener('mouseout', () => link.style.color = 'rgba(255,255,255,0.7)');
         });
-
         panel.appendChild(watermark);
         document.body.appendChild(panel);
-
-        // Animação de entrada
         setTimeout(() => {
             panel.style.transform = 'translateY(0)';
             panel.style.opacity = '1';
         }, 100);
-        console.log("Floating Panel do resolvedor v28 criado com sucesso!");
+        console.log("Floating Panel do resolvedor v29 criado com sucesso!");
     }
 
     async function fetchWithTimeout(resource, options = {}, timeout = 15000) {
@@ -533,6 +501,5 @@
         }
     }
 
-    // Inicializa o Floating Panel após um breve atraso
     setTimeout(criarFloatingPanel, 2000);
 })();
