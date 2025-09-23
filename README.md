@@ -4,8 +4,8 @@
 
 Feito por **mzzvxm**
 
-  * **GitHub:** [@mzzvxm](https://www.google.com/search?q=https://github.com/mzzvxm)
-  * **Instagram:** [@mzzvxm](https://www.google.com/search?q=https://instagram.com/mzzvxm)
+  * **GitHub:** [@mzzvxm](https://github.com/mzzvxm)
+  * **Instagram:** [@mzzvxm](https://instagram.com/mzzvxm)
 
 ## 🖥️ Script para uso (copie e cole)  
 ```js
