@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      33.0
-// @description  Resolve questões do Quizizz
+// @version      34.0
+// @description  Resolve questões do Quizizz com correção de bug no controle de timeout.
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
 // @match        https://wayground.com/join/game/*
@@ -16,7 +16,7 @@
     // -----------------------------------------------------------------------------------
     const GEMINI_API_KEYS = [
         "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc",   // Chave 1
-        "AIzaSyDzHvHcoBgfeNJf0iwM2AfjQM3mQ9sW-W8",  // Chave 2
+        "AIzaSyB0kFKCrzWIWZio1f5g_V-lmT0CK7Di8vc",  // Chave 2
         "AIzaSyD2MWKShsFUhgjlh9TO-Ob9j7sRVVhCW0I"  // Chave 3
     ];
     let currentApiKeyIndex = 0;
@@ -421,7 +421,7 @@
         const panel = document.createElement('div');
         panel.id = 'mzzvxm-floating-panel';
         Object.assign(panel.style, {
-            position: 'fixed', bottom: '60px', right: '20px', zIndex: '2147483647',
+            position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483647',
             display: 'flex', flexDirection: 'column', alignItems: 'stretch',
             gap: '10px', padding: '12px', backgroundColor: 'rgba(26, 27, 30, 0.7)',
             backdropFilter: 'blur(8px)', webkitBackdropFilter: 'blur(8px)', borderRadius: '16px',
@@ -443,7 +443,7 @@
             textAlign: 'left'
         });
         panel.appendChild(responseViewer);
-
+        
         const viewResponseBtn = document.createElement('button');
         viewResponseBtn.id = 'view-raw-response-btn';
         viewResponseBtn.innerText = 'Ver Resposta da IA';
@@ -463,9 +463,7 @@
             }
         });
         panel.appendChild(viewResponseBtn);
-
-        panel.style.setProperty('bottom', '60px', 'important');
-
+        
         const button = document.createElement('button');
         button.id = 'ai-solver-button';
         button.innerHTML = '✨ Resolver';
@@ -483,7 +481,7 @@
         button.addEventListener('mouseup', () => { button.style.transform = 'translateY(-2px)'; button.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.3)'; });
         button.addEventListener('click', resolverQuestao);
         panel.appendChild(button);
-
+        
         const watermark = document.createElement('div');
         const githubIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 3c-.58.0-1.25.27-2 1.5c-2.2.86-4.5 1.3-7 1.3-2.5 0-4.7-.44-7-1.3-.75-1.23-1.42-1.5-2-1.5A5.07 5.07 0 0 0 4 4.77 5.44 5.44 0 0 0 2 10.71c0 6.13 3.49 7.34 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
         const instagramIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`;
@@ -500,7 +498,7 @@
         });
         panel.appendChild(watermark);
         document.body.appendChild(panel);
-
+        
         setTimeout(() => {
             panel.style.transform = 'translateY(0)';
             panel.style.opacity = '1';
@@ -512,7 +510,7 @@
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
-            const response = await fetch(resource, { ...options, signal: controll/er.signal });
+            const response = await fetch(resource, { ...options, signal: controller.signal });
             clearTimeout(id);
             return response;
         } catch (error) {
@@ -521,20 +519,20 @@
             throw error;
         }
     }
-
-    async function imageUrlToBase64(url) {
-        try {
-            const r = await fetchWithTimeout(url);
-            const b = await r.blob();
-            return new Promise(res => {
-                const reader = new FileReader();
-                reader.onloadend = () => res(reader.result);
-                reader.readAsDataURL(b);
-            });
-        } catch (e) {
-            console.error("Erro ao converter imagem:", e);
-            return null;
-        }
+    
+    async function imageUrlToBase64(url) { 
+        try { 
+            const r = await fetchWithTimeout(url); 
+            const b = await r.blob(); 
+            return new Promise(res => { 
+                const reader = new FileReader(); 
+                reader.onloadend = () => res(reader.result); 
+                reader.readAsDataURL(b); 
+            }); 
+        } catch (e) { 
+            console.error("Erro ao converter imagem:", e); 
+            return null; 
+        } 
     }
 
     setTimeout(criarFloatingPanel, 2000);
