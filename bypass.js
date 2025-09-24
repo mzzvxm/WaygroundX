@@ -16,7 +16,7 @@
     // -----------------------------------------------------------------------------------
     const GEMINI_API_KEYS = [
         "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc",   // Chave 1
-        "AIzaSyB1Zg2ZIwXhRXIcOes_eZSsXJttDTFgK2Q",  // Chave 2
+        "AIzaSyDzHvHcoBgfeNJf0iwM2AfjQM3mQ9sW-W8",  // Chave 2
         "AIzaSyD2MWKShsFUhgjlh9TO-Ob9j7sRVVhCW0I"  // Chave 3
     ];
     let currentApiKeyIndex = 0;
