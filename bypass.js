@@ -120,7 +120,7 @@
                 currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
                 continue;
             }
-            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${currentKey}`;
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${currentKey}`;
             let promptDeInstrucao = "", formattedOptions = "";
             switch (quizData.questionType) {
                  case 'multi_drag_into_blank': promptDeInstrucao = `Esta é uma questão de combinar múltiplas sentenças com suas expressões corretas. Responda com os pares no formato EXATO: 'Sentença da pergunta -> Expressão da opção', com cada par em uma nova linha.`; const prompts = quizData.dropZones.map(item => `- "${item.prompt}"`).join('\n'); const options = quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n'); formattedOptions = `Sentenças:\n${prompts}\n\nExpressões (Opções):\n${options}`; break;
