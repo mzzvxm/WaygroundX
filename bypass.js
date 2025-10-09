@@ -15,9 +15,9 @@
     // IMPORTANTE: LISTA DE CHAVES DE API
     // -----------------------------------------------------------------------------------
     const GEMINI_API_KEYS = [
-        "AIzaSyD_4aW-71T1Jc18Ggaz-6nUGZbR8A9eHEc",   // Chave 1
-        "AIzaSyB0kFKCrzWIWZio1f5g_V-lmT0CK7Di8vc",  // Chave 2
-        "AIzaSyD2MWKShsFUhgjlh9TO-Ob9j7sRVVhCW0I"  // Chave 3
+        "CHAVE1",   // Chave 1
+        "CHAVE2",  // Chave 2
+        "CHAVE3"  // Chave 3
     ];
     let currentApiKeyIndex = 0;
     let lastAiResponse = '';
