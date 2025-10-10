@@ -421,7 +421,7 @@
         const panel = document.createElement('div');
         panel.id = 'mzzvxm-floating-panel';
         Object.assign(panel.style, {
-            position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483647',
+            position: 'fixed', bottom: '60px', right: '20px', zIndex: '2147483647',
             display: 'flex', flexDirection: 'column', alignItems: 'stretch',
             gap: '10px', padding: '12px', backgroundColor: 'rgba(26, 27, 30, 0.7)',
             backdropFilter: 'blur(8px)', webkitBackdropFilter: 'blur(8px)', borderRadius: '16px',
