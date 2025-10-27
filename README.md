@@ -7,10 +7,8 @@ Feito por **mzzvxm**
   * **GitHub:** [@mzzvxm](https://github.com/mzzvxm)
   * **Instagram:** [@mzzvxm](https://instagram.com/mzzvxm)
 
-## 🖥️ Script para uso (copie e cole)  
-```js
-javascript:fetch("https://raw.githubusercontent.com/mzzvxm/WaygroundX/main/bypass.js").then(r=>r.text()).then(eval);
-```
+## 🖥️ Crie seu Script aqui!
+* [WaygroundX](https://waygroundx.vercel.app/)
 
 ## ✅ Funcionalidades
 
