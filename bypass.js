@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      45.0
-// @description  Resolve questões do Quizizz - Wayground
+// @version      46.0
+// @description  Resolve questões do Quizizz e detecta automaticamente o Quiz ID no console.
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
 // @match        https://wayground.com/join/game/*
@@ -9,7 +9,7 @@
 // ==/UserScript==
 
 (function() {
-    'use strict';
+    'useS trict';
 
     // -----------------------------------------------------------------------------------
     // IMPORTANTE: LISTA DE CHAVES DE API
@@ -27,7 +27,13 @@
 
     let currentApiKeyIndex = 0;
     let lastAiResponse = '';
-    // -----------------------------------------------------------------------------------
+
+    // --- DETECÇÃO DE QUIZ ID (v46) ---
+    const regexQuizId = /\/(?:quiz|quizzes|admin\/quiz|games|attempts|join)\/([a-f0-9]{24})/i;
+    let quizIdDetected = null;
+    let interceptorsStarted = false;
+    // -----------------------------------
+
 
     function waitForElement(selector, all = false, timeout = 5000) {
         return new Promise((resolve, reject) => {
@@ -157,7 +163,6 @@
             return { questionText, questionImageUrl, questionType: 'drag_into_blank', draggableOptions, dropZone: { element: droppableBlanks[0] } };
         }
 
-        // (v43) "Match Order" (Texto ou Imagem)
         const matchContainer = document.querySelector('.match-order-options-container, .question-options-layout');
         if (matchContainer) {
             const draggableItemElements = Array.from(matchContainer.querySelectorAll('.match-order-option.is-option-tile'));
@@ -184,7 +189,6 @@
                     }
 
                     if (imageUrl) {
-                        // --- CORREÇÃO (v45): Removido colchetes do ID ---
                         draggableItems.push({ id: `IMAGEM ${i + 1}`, imageUrl, element: el });
                     }
                 }
@@ -233,7 +237,6 @@
                 formattedOptions = "Pool de Opções Disponíveis: " + quizData.allAvailableOptions.join(', ');
                 break;
             case 'match_image_to_text':
-                // --- CORREÇÃO (v45): Prompt ajustado para pedir ID sem colchetes ---
                 promptDeInstrucao = `Esta é uma questão de combinar imagens com seus textos correspondentes. Para cada imagem, forneça o par correto no formato EXATO: 'Texto da Opção -> ID da Imagem' (ex: 90° -> IMAGEM 3), com cada par em uma nova linha.`;
                 const dropZoneTexts = quizData.dropZones.map(item => `- "${item.text}"`).join('\n');
                 formattedOptions = `Opções de Texto (Locais para Soltar):\n${dropZoneTexts}`;
@@ -283,7 +286,6 @@
                             text: item.id, // Usa "IMAGEM 1" como texto
                             element: item.element
                         }));
-                        // --- CORREÇÃO (v45): Prompt de fallback ajustado ---
                         promptDeInstrucao = `Responda com os pares no formato EXATO: 'Texto do Local para Soltar -> ID da Imagem' (ex: 90° -> IMAGEM 3), com cada par em uma nova linha.`;
                         const draggables = quizData.draggableItems.map(item => `- "${item.text}"`).join('\n');
                         const droppables = quizData.dropZones.map(item => `- "${item.text}"`).join('\n');
@@ -611,7 +613,6 @@
             const highlightColorsImg = ['#FFD700', '#00FFFF', '#FF00FF', '#7FFF00', '#FF8C00', '#DA70D6'];
             let colorIndexImg = 0;
 
-            // --- CORREÇÃO (v45): Remove colchetes, se houver, para garantir a correspondência ---
             const cleanPairPartImg = (str) => str.replace(/[`"\[\]]/g, '').trim();
 
             const pairingsImg = aiAnswerText.split('\n').filter(line => line.includes('->')).map(line => {
@@ -621,14 +622,11 @@
 
             if (pairingsImg.length === 0) { console.error("Não foi possível extrair pares válidos (Texto -> ID Imagem) da resposta da IA."); return; }
 
-            // Map: "IMAGEM 1" -> element
             const draggablesMapImg = new Map(quizData.draggableItems.map(i => [i.id, i.element]));
-            // Map: "40° OR 140°" -> element
             const dropZonesMapImg = new Map(quizData.dropZones.map(i => [i.text, i.element]));
 
             for (const [partA, partB] of pairingsImg) {
                 let sourceEl, destinationEl;
-                // partA = "40° OR 140°", partB = "IMAGEM 1"
                 if (dropZonesMapImg.has(partA) && draggablesMapImg.has(partB)) {
                     destinationEl = dropZonesMapImg.get(partA);
                     sourceEl = draggablesMapImg.get(partB);
@@ -1007,10 +1005,115 @@
         console.log("Floating Panel do resolvedor v45 (correção de ID de imagem) criado com sucesso!");
     }
 
+    // --- LÓGICA DE DETECÇÃO DE QUIZ ID (v46) ---
+
+    /**
+     * Loga o Quiz ID no console se for um ID novo.
+     * @param {string} id - O quizId de 24 caracteres.
+     * @param {string} source - De onde o ID foi detectado (ex: "URL", "fetch", "XHR").
+     */
+    function logQuizId(id, source) {
+        if (id === quizIdDetected) {
+            return; // Já detectamos e logamos este ID
+        }
+        quizIdDetected = id;
+        console.log(`[Quizizz Bypass] Novo Quiz ID detectado (${source}): %c${id}`, "color: #00FF00; font-weight: bold;");
+        // Futuramente, podemos chamar a função de buscar respostas aqui:
+        // fetchQuizData(id);
+    }
+
+    /**
+     * Tenta encontrar o quizId na URL atual.
+     * @returns {string|null} O ID encontrado ou null.
+     */
+    function detectQuizIdFromURL() {
+        const match = window.location.pathname.match(regexQuizId);
+        return match ? match[1] : null;
+    }
+
+    /**
+     * Intercepta a função 'fetch' global para monitorar requisições de rede.
+     */
+    function interceptFetch() {
+        // Usa a função fetchWithTimeout que já existe no script
+        const originalFetch = window.fetch;
+        window.fetch = async function (...args) {
+            const [resource] = args;
+            if (typeof resource === 'string') {
+                const match = resource.match(regexQuizId);
+                if (match) {
+                    const id = match[1];
+                    logQuizId(id, "fetch");
+                }
+            }
+            // Chama a função original (ou a nossa com timeout, mas para isso
+            // precisaríamos reestruturar a `fetchWithTimeout` para ser um wrapper)
+            // Por simplicidade, chamamos a original.
+            return originalFetch.apply(this, args);
+        };
+    }
+
+    /**
+     * Intercepta o 'XMLHttpRequest' para monitorar requisições de rede (método antigo).
+     */
+    function interceptXHR() {
+        const originalOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (method, url) {
+            if (typeof url === 'string') {
+                const match = url.match(regexQuizId);
+                if (match) {
+                    const id = match[1];
+                    logQuizId(id, "XHR");
+                }
+            }
+            return originalOpen.apply(this, arguments);
+        };
+    }
+
+    /**
+     * Função de inicialização para o detector de ID.
+     */
+    function initQuizIdDetector() {
+        console.log("[Quizizz Bypass] Detector de Quiz ID carregado.");
+        // Tenta detectar pela URL imediatamente
+        const id = detectQuizIdFromURL();
+        if (id) {
+            logQuizId(id, "URL");
+        }
+
+        // Inicia os interceptadores de rede (se ainda não o fez)
+        if (!interceptorsStarted) {
+            console.log("[Quizizz Bypass] Iniciando interceptadores de rede (fetch/XHR).");
+            // Nota: Isso substitui o `fetch` global.
+            // A `fetchWithTimeout` continuará funcionando, pois ela chama o `fetch` global (agora interceptado).
+            interceptFetch();
+            interceptXHR();
+            interceptorsStarted = true;
+        }
+    }
+
+    /**
+     * Monitora a navegação em Single Page Applications (SPA).
+     */
+    (function monitorSPA() {
+        const pushState = history.pushState;
+        history.pushState = function () {
+            const result = pushState.apply(this, arguments);
+            // Roda o detector de ID novamente após uma mudança de URL
+            setTimeout(initQuizIdDetector, 300);
+            return result;
+        };
+        window.addEventListener("popstate", () => setTimeout(initQuizIdDetector, 300));
+    })();
+
+    // --- FIM DA LÓGICA DE DETECÇÃO DE QUIZ ID ---
+
+
     async function fetchWithTimeout(resource, options = {}, timeout = 15000) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
+            // Importante: `fetch` aqui se refere ao `fetch` global (que pode ter sido interceptado)
             const response = await fetch(resource, { ...options, signal: controller.signal });
             clearTimeout(id);
             return response;
@@ -1043,5 +1146,8 @@
         }
     }
 
-    setTimeout(criarFloatingPanel, 2000);
+    // --- Start ---
+    setTimeout(criarFloatingPanel, 2000); // Inicia a UI
+    initQuizIdDetector(); // Inicia o detector de ID
+
 })();
