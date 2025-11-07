@@ -20,7 +20,7 @@
         "CHAVE3"  // Chave 3
     ];
     // --- Integração OpenRouter/DeepSeek ---
-    const OPENROUTER_API_KEY = "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"; // Coloque sua chave do OpenRouter aqui
+    const OPENROUTER_API_KEY = "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"; // Coloque sua chave do OpenRouter aqui
     const DEEPSEEK_MODEL_NAME = "deepseek/deepseek-chat"; // Modelo DeepSeek (pode ser "deepseek/deepseek-v2")
     let currentAiProvider = 'gemini'; // 'gemini' ou 'deepseek'
     // -----------------------------------------------------------------------------------
