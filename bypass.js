@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      47.0
+// @version      50.0
 // @description  Resolve questões do Quizizz
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
@@ -30,15 +30,16 @@
     // -----------------------------------------------------------------------------------
 
     let currentApiKeyIndex = 0;
-    let currentOpenRouterKeyIndex = 0; // (v47) Novo índice para chaves do OpenRouter
+    let currentOpenRouterKeyIndex = 0;
     let lastAiResponse = '';
-    
+
     // --- DETECÇÃO DE QUIZ ID (v46) ---
     const regexQuizId = /\/(?:quiz|quizzes|admin\/quiz|games|attempts|join)\/([a-f0-9]{24})/i;
     let quizIdDetected = null;
     let interceptorsStarted = false;
     // -----------------------------------
-    
+
+    // --- FUNÇÕES UTILITÁRIAS ---
 
     function waitForElement(selector, all = false, timeout = 5000) {
         return new Promise((resolve, reject) => {
@@ -72,14 +73,15 @@
         });
     }
 
+    // --- LÓGICA DO RESOLVEDOR ---
 
     async function extrairDadosDaQuestao() {
     try {
-        const questionTextElement = document.querySelector('#questionText'); 
+        const questionTextElement = document.querySelector('#questionText');
         const questionText = questionTextElement ? questionTextElement.innerText.trim().replace(/\s+/g, ' ') : "Não foi possível encontrar o texto da pergunta.";
         const questionImageElement = document.querySelector('img[data-testid="question-container-image"]');
         const questionImageUrl = questionImageElement ? questionImageElement.src : null;
-        
+
         const extractText = (el) => {
             const mathElement = el.querySelector('annotation[encoding="application/x-tex"]');
             return mathElement ? mathElement.textContent.trim() : el.querySelector('#optionText')?.innerText.trim() || '';
@@ -115,7 +117,7 @@
                 console.error("Falha ao ler o pool de opções do primeiro dropdown.", e);
                 if (document.querySelector(popperSelector)) document.body.click();
             }
-            
+
             if (document.querySelector(popperSelector)) document.body.click();
             try {
                 await waitForElementToDisappear(popperSelector, 2000);
@@ -167,14 +169,14 @@
              const draggableOptions = Array.from(dragOptions).map(el => ({ text: el.querySelector('.dnd-option-text')?.innerText.trim() || '', element: el }));
             return { questionText, questionImageUrl, questionType: 'drag_into_blank', draggableOptions, dropZone: { element: droppableBlanks[0] } };
         }
-        
-        const matchContainer = document.querySelector('.match-order-options-container, .question-options-layout'); 
+
+        const matchContainer = document.querySelector('.match-order-options-container, .question-options-layout');
         if (matchContainer) {
             const draggableItemElements = Array.from(matchContainer.querySelectorAll('.match-order-option.is-option-tile'));
             const dropZoneElements = Array.from(matchContainer.querySelectorAll('.match-order-option.is-drop-tile'));
-            
+
             const isImageMatch = draggableItemElements.length > 0 && (draggableItemElements[0].querySelector('.option-image') || draggableItemElements[0].dataset.type === 'image');
-            
+
             if (isImageMatch) {
                 console.log("Tipo Match-Order (Imagem p/ Texto) detectado.");
                 const draggableItems = [];
@@ -186,10 +188,10 @@
                     let imageUrl = urlMatch ? urlMatch[1] : null;
 
                     if (!imageUrl) {
-                        const dataCy = el.dataset.cy; 
+                        const dataCy = el.dataset.cy;
                         if (dataCy && dataCy.includes('url(')) {
                             const urlMatchCy = dataCy.match(/url\((.+)\)/);
-                            if (urlMatchCy) imageUrl = urlMatchCy[1].replace(/\?w=\d+&h=\d+$/, ''); 
+                            if (urlMatchCy) imageUrl = urlMatchCy[1].replace(/\?w=\d+&h=\d+$/, '');
                         }
                     }
 
@@ -197,15 +199,15 @@
                         draggableItems.push({ id: `IMAGEM ${i + 1}`, imageUrl, element: el });
                     }
                 }
-                
+
                 const dropZones = dropZoneElements.map(el => ({ text: extractText(el), element: el }));
-                
+
                 return { questionText, questionImageUrl, questionType: 'match_image_to_text', draggableItems, dropZones };
 
             } else if (draggableItemElements.length > 0 && dropZoneElements.length > 0) {
                 const draggableItems = draggableItemElements.map(el => ({ text: extractText(el), element: el }));
                 const dropZones = dropZoneElements.map(el => ({ text: extractText(el), element: el }));
-                
+
                 const questionType = questionText.toLowerCase().includes('reorder') ? 'reorder' : 'match_order';
                 return { questionText, questionImageUrl, questionType, draggableItems, dropZones };
             }
@@ -246,11 +248,11 @@
                 const dropZoneTexts = quizData.dropZones.map(item => `- "${item.text}"`).join('\n');
                 formattedOptions = `Opções de Texto (Locais para Soltar):\n${dropZoneTexts}`;
                 break;
-            case 'match_order': 
-                promptDeInstrucao = `Responda com os pares no formato EXATO: 'Texto do Local para Soltar -> Texto do Item para Arrastar', com cada par em uma nova linha.`; 
-                const draggables = quizData.draggableItems.map(item => `- "${item.text}"`).join('\n'); 
-                const droppables = quizData.dropZones.map(item => `- "${item.text}"`).join('\n'); 
-                formattedOptions = `Itens para Arrastar:\n${draggables}\n\nLocais para Soltar:\n${droppables}`; 
+            case 'match_order':
+                promptDeInstrucao = `Responda com os pares no formato EXATO: 'Texto do Local para Soltar -> Texto do Item para Arrastar', com cada par em uma nova linha.`;
+                const draggables = quizData.draggableItems.map(item => `- "${item.text}"`).join('\n');
+                const droppables = quizData.dropZones.map(item => `- "${item.text}"`).join('\n');
+                formattedOptions = `Itens para Arrastar:\n${draggables}\n\nLocais para Soltar:\n${droppables}`;
                 break;
             case 'multi_drag_into_blank': promptDeInstrucao = `Esta é uma questão de combinar múltiplas sentenças com suas expressões corretas. Responda com os pares no formato EXATO: 'Sentença da pergunta -> Expressão da opção', com cada par em uma nova linha.`; const prompts = quizData.dropZones.map(item => `- "${item.prompt}"`).join('\n'); const options = quizData.draggableOptions.map(item => `- "${item.text}"`).join('\n'); formattedOptions = `Sentenças:\n${prompts}\n\nExpressões (Opções):\n${options}`; break;
             case 'equation': promptDeInstrucao = `Resolva a seguinte equação ou inequação. Forneça apenas a expressão final simplificada (ex: x = 5, ou y > 3).`; formattedOptions = `EQUAÇÃO: "${quizData.questionText}"`; break;
@@ -273,7 +275,7 @@
         if (currentAiProvider === 'deepseek' && (base64Image || hasDraggableImages)) {
             console.warn("DeepSeek não suporta imagens. Mostrando aviso...");
             try {
-                const acaoUsuario = await mostrarAvisoDeepSeekImagem(); 
+                const acaoUsuario = await mostrarAvisoDeepSeekImagem();
                 if (acaoUsuario === 'gemini') {
                     console.log("Usuário escolheu usar Gemini.");
                     currentAiProvider = 'gemini';
@@ -284,7 +286,7 @@
                     }
                 } else if (acaoUsuario === 'sem_imagem') {
                     console.log("Usuário escolheu enviar para o DeepSeek sem a imagem.");
-                    base64Image = null; 
+                    base64Image = null;
                     if (quizData.questionType === 'match_image_to_text') {
                         quizData.questionType = 'match_order'; // Downgrade
                         quizData.draggableItems = quizData.draggableItems.map(item => ({
@@ -300,7 +302,7 @@
                 }
             } catch (error) {
                 console.error(error.message);
-                throw error; 
+                throw error;
             }
         }
 
@@ -318,17 +320,17 @@
                         continue;
                     }
                     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${currentKey}`;
-                    
+
                     let promptParts = [{ text: textPrompt }];
-                    
-                    if (base64Image) { 
+
+                    if (base64Image) {
                         const [header, data] = base64Image.split(',');
                         let mimeType = header.match(/:(.*?);/)[1];
                         if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) mimeType = 'image/jpeg';
                         promptParts.push({ inline_data: { mime_type: mimeType, data: data } });
                     }
-                    
-                    if (quizData.questionType === 'match_image_to_text') { 
+
+                    if (quizData.questionType === 'match_image_to_text') {
                         promptParts.push({ text: "\n\nIMAGENS (Itens para Arrastar):\n" });
                         for (const item of quizData.draggableItems) {
                              const base64 = await imageUrlToBase64(item.imageUrl);
@@ -346,13 +348,13 @@
                         const response = await fetchWithTimeout(API_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: promptParts }] }) 
+                            body: JSON.stringify({ contents: [{ parts: promptParts }] })
                         });
                         if (response.ok) {
                             const data = await response.json();
                             aiResponseText = data.candidates[0].content.parts[0].text;
                             console.log(`Sucesso com a Chave API Gemini #${currentApiKeyIndex + 1}.`);
-                            break; 
+                            break;
                         }
                         const errorData = await response.json();
                         const errorMessage = errorData.error?.message || `Erro ${response.status}`;
@@ -371,7 +373,6 @@
                     throw new Error("Todas as chaves de API do Gemini falharam.");
                 }
 
-            // --- LÓGICA DEEPSEEK (MODIFICADA v47) ---
             } else if (currentAiProvider === 'deepseek') {
                 console.log("Usando Provedor: DeepSeek (via OpenRouter)");
                 let deepseekKeyFailed = false;
@@ -396,9 +397,9 @@
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${currentKey}`, // Usa a chave atual
-                                'HTTP-Referer': 'https://github.com/mzzvxm', 
-                                'X-Title': 'Quizizz Bypass Script' 
+                                'Authorization': `Bearer ${currentKey}`,
+                                'HTTP-Referer': 'https://github.com/mzzvxm',
+                                'X-Title': 'Quizizz Bypass Script'
                             },
                             body: body
                         });
@@ -407,7 +408,7 @@
                             const data = await response.json();
                             aiResponseText = data.choices[0].message.content;
                             console.log(`Sucesso com a Chave OpenRouter #${currentOpenRouterKeyIndex + 1}.`);
-                            break; // Sucesso, sair do loop
+                            break;
                         }
 
                         const errorData = await response.json();
@@ -420,18 +421,16 @@
                          lastAiResponse = `Falha na Chave OpenRouter #${currentOpenRouterKeyIndex + 1}: ${error.message}`;
                     }
 
-                    // Tenta a próxima chave
                     currentOpenRouterKeyIndex = (currentOpenRouterKeyIndex + 1) % OPENROUTER_API_KEYS.length;
                     if (i === OPENROUTER_API_KEYS.length - 1) {
                         deepseekKeyFailed = true;
                     }
                 }
-                
+
                 if (!aiResponseText && deepseekKeyFailed) {
                     throw new Error("Todas as chaves de API do OpenRouter falharam.");
                 }
             }
-            // --- FIM DA LÓGICA (v47) ---
 
             // --- 4. Retorno ---
             console.log("Resposta bruta da IA:", aiResponseText);
@@ -441,7 +440,7 @@
         } catch (error) {
             console.error(`Falha ao obter resposta da IA (${currentAiProvider}):`, error.message);
             lastAiResponse = `Erro: ${error.message}`;
-            throw error; 
+            throw error;
         }
     }
 
@@ -461,7 +460,7 @@
 
     switch (quizData.questionType) {
         case 'multi_dropdown':
-            const popperSelector = '.v-popper__popper--shown'; 
+            const popperSelector = '.v-popper__popper--shown';
             const answers = aiAnswerText.split('\n').map(line => {
                 const match = line.match(/\[RESPOSTA (\d+)\]:\s*(.*)/i);
                 if (!match) return null;
@@ -479,26 +478,26 @@
             for (let i = 0; i < quizData.dropdowns.length; i++) {
                 const dd = quizData.dropdowns[i];
                 const currentButtonText = dd.button.innerText.trim();
-                const targetAnswer = answersMap.get(i); 
+                const targetAnswer = answersMap.get(i);
 
                 const isFilled = currentButtonText !== placeholderText;
                 const hasTarget = !!targetAnswer;
                 const isWrong = isFilled && hasTarget && currentButtonText !== targetAnswer;
-                const isUnnecessary = isFilled && !hasTarget; 
-                
+                const isUnnecessary = isFilled && !hasTarget;
+
                 if (isWrong || isUnnecessary) {
                     console.log(`Limpando Dropdown #${i + 1} (estava com "${currentButtonText}")...`);
-                    dd.button.click(); 
+                    dd.button.click();
                     try {
                         const optionElements = await waitForElement(`${popperSelector} button.dropdown-option`, true, 2000);
                         const selectedOption = Array.from(optionElements).find(el => el.innerText.trim() === currentButtonText);
                         if (selectedOption) {
-                            selectedOption.click(); 
+                            selectedOption.click();
                         } else {
                             document.body.click();
                         }
                         await waitForElementToDisappear(popperSelector, 2000);
-                    } catch (e) { 
+                    } catch (e) {
                         console.error(`Erro ao tentar limpar Dropdown #${i + 1}: ${e.message}`);
                         if (document.querySelector(popperSelector)) {
                             document.body.click();
@@ -507,7 +506,7 @@
                     }
                 }
             }
-            
+
             // Fase 2: Preenchimento
             console.log("FASE 2: Preenchendo respostas corretas da IA...");
             for (const res of answers) {
@@ -529,14 +528,14 @@
                             console.warn(`Opção "${res.answer}" para Dropdown #${res.index + 1} ainda está desabilitada.`);
                             document.body.click();
                         } else {
-                            targetOption.click(); 
+                            targetOption.click();
                         }
                     } else {
                         console.error(`Opção "${res.answer}" não encontrada no Dropdown #${res.index + 1}. (A IA pode ter alucinado)`);
                         document.body.click();
                     }
                     await waitForElementToDisappear(popperSelector, 2000);
-                } catch (e) { 
+                } catch (e) {
                     console.error(`Erro ao tentar selecionar para o dropdown #${res.index + 1}: ${e.message}`);
                     if (document.querySelector(popperSelector)) {
                         document.body.click();
@@ -650,30 +649,30 @@
             let colorIndexImg = 0;
 
             const cleanPairPartImg = (str) => str.replace(/[`"\[\]]/g, '').trim();
-            
+
             const pairingsImg = aiAnswerText.split('\n').filter(line => line.includes('->')).map(line => {
                 const parts = line.split('->');
                 return parts.length === 2 ? [cleanPairPartImg(parts[0]), cleanPairPartImg(parts[1])] : null;
             }).filter(Boolean);
-            
+
             if (pairingsImg.length === 0) { console.error("Não foi possível extrair pares válidos (Texto -> ID Imagem) da resposta da IA."); return; }
-            
+
             const draggablesMapImg = new Map(quizData.draggableItems.map(i => [i.id, i.element]));
             const dropZonesMapImg = new Map(quizData.dropZones.map(i => [i.text, i.element]));
 
             for (const [partA, partB] of pairingsImg) {
                 let sourceEl, destinationEl;
                 if (dropZonesMapImg.has(partA) && draggablesMapImg.has(partB)) {
-                    destinationEl = dropZonesMapImg.get(partA); 
-                    sourceEl = draggablesMapImg.get(partB); 
+                    destinationEl = dropZonesMapImg.get(partA);
+                    sourceEl = draggablesMapImg.get(partB);
                 } else if (dropZonesMapImg.has(partB) && draggablesMapImg.has(partA)) {
-                    destinationEl = dropZonesMapImg.get(partB); 
-                    sourceEl = draggablesMapImg.get(partA); 
-                } else { 
+                    destinationEl = dropZonesMapImg.get(partB);
+                    sourceEl = draggablesMapImg.get(partA);
+                } else {
                     console.warn(`Par não mapeado: "${partA}" (existe? ${dropZonesMapImg.has(partA)}) -> "${partB}" (existe? ${draggablesMapImg.has(partB)})`);
-                    continue; 
+                    continue;
                 }
-                
+
                 if (sourceEl && destinationEl) {
                     const color = highlightColorsImg[colorIndexImg % highlightColorsImg.length];
                     const highlightStyle = `box-shadow: 0 0 15px 5px ${color}; border-radius: 8px;`;
@@ -714,9 +713,11 @@
         default:
             const normalize = (str) => {
                 if (typeof str !== 'string') return '';
-                let cleaned = str.replace(/[^a-zA-Z\u00C0-\u017F\s]/g, '').replace(/\s+/g, ' ');
+                // (v48) Mantém letras, números, espaços, e símbolos ² e ³
+                let cleaned = str.replace(/[^a-zA-Z\u00C0-\u017F0-9\s²³]/g, '').replace(/\s+/g, ' ');
                 return cleaned.trim().toLowerCase();
             };
+
             if (quizData.questionType === 'open_ended') {
                 await new Promise(resolve => {
                     quizData.answerElement.focus();
@@ -735,10 +736,17 @@
                 });
             } else if (quizData.questionType === 'single_choice') {
                 const normalizedAiAnswer = normalize(aiAnswerText);
-                const bestMatch = quizData.options.find(opt => normalize(opt.text) === normalizedAiAnswer);
+                const bestMatch = quizData.options.find(opt => {
+                    const normalizedOption = normalize(opt.text);
+                    return normalizedOption === normalizedAiAnswer;
+                });
+
                 if (bestMatch) {
+                    console.log("Correspondência encontrada!", bestMatch.element);
                     bestMatch.element.style.border = '5px solid #00FF00';
                     bestMatch.element.click();
+                } else {
+                    console.warn("Nenhuma correspondência exata encontrada após normalização.");
                 }
             }
             break;
@@ -830,6 +838,8 @@
         button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
     }
 }
+
+    // --- LÓGICA DA UI (v50) ---
 
     function mostrarAvisoDeepSeekImagem() {
         return new Promise((resolve, reject) => {
@@ -927,6 +937,58 @@
         });
     }
 
+    /**
+     * Torna o painel flutuante arrastável. (v50)
+     * @param {HTMLElement} panel - O elemento principal do painel.
+     * @param {HTMLElement} handle - O elemento que aciona o arraste (neste caso, o próprio painel).
+     */
+    function makeDraggable(panel, handle) {
+        let offsetX = 0, offsetY = 0, isDragging = false;
+
+        handle.addEventListener('mousedown', (e) => {
+            // Previne o arraste se o clique foi em um botão ou link
+            if (e.target.tagName === 'BUTTON' || e.target.closest('a')) return;
+
+            isDragging = true;
+            const rect = panel.getBoundingClientRect();
+
+            // Converte a posição 'bottom'/'right' para 'top'/'left' na primeira vez
+            if (panel.style.bottom || panel.style.right) {
+                panel.style.right = 'auto';
+                panel.style.bottom = 'auto';
+                panel.style.top = rect.top + 'px';
+                panel.style.left = rect.left + 'px';
+            }
+
+            offsetX = e.clientX - panel.getBoundingClientRect().left;
+            offsetY = e.clientY - panel.getBoundingClientRect().top;
+
+            panel.style.transition = 'none'; // Desabilita transição suave durante o arraste
+            handle.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            let newX = e.clientX - offsetX;
+            let newY = e.clientY - offsetY;
+
+            // Mantém o painel dentro da tela
+            newX = Math.max(0, Math.min(newX, window.innerWidth - panel.offsetWidth));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - panel.offsetHeight));
+
+            panel.style.top = newY + 'px';
+            panel.style.left = newX + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            panel.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out'; // Reabilita
+            handle.style.cursor = 'default';
+        });
+    }
+
     function criarFloatingPanel() {
         if (document.getElementById('mzzvxm-floating-panel')) return;
         const panel = document.createElement('div');
@@ -938,7 +1000,8 @@
             backdropFilter: 'blur(8px)', webkitBackdropFilter: 'blur(8px)', borderRadius: '16px',
             boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
             transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
-            transform: 'translateY(20px)', opacity: '0'
+            transform: 'translateY(20px)', opacity: '0',
+            cursor: 'default'
         });
 
         const responseViewer = document.createElement('div');
@@ -957,7 +1020,6 @@
 
         const viewResponseBtn = document.createElement('button');
         viewResponseBtn.id = 'view-raw-response-btn';
-        viewResponseBtn.innerText = 'Ver Resposta da IA';
         Object.assign(viewResponseBtn.style, {
             background: 'none', border: '1px solid rgba(255, 255, 255, 0.2)',
             color: 'rgba(255, 255, 255, 0.6)', cursor: 'pointer',
@@ -965,6 +1027,7 @@
             display: 'none', transition: 'all 0.2s ease',
             marginBottom: '4px'
         });
+        viewResponseBtn.innerText = 'Ver Resposta da IA';
         viewResponseBtn.addEventListener('click', () => {
             if (responseViewer.style.display === 'block') {
                 responseViewer.style.display = 'none';
@@ -974,6 +1037,20 @@
             }
         });
         panel.appendChild(viewResponseBtn);
+
+        // --- Botão Ocultar (v50) ---
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'toggle-ui-btn';
+        toggleBtn.innerText = 'Ocultar';
+        Object.assign(toggleBtn.style, {
+            background: 'none', border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: 'rgba(255, 255, 255, 0.6)', cursor: 'pointer',
+            fontSize: '11px', padding: '4px 8px', borderRadius: '6px',
+            transition: 'all 0.2s ease',
+            marginBottom: '4px'
+        });
+        panel.appendChild(toggleBtn);
+        // --- Fim do Botão Ocultar ---
 
         const aiToggleBtn = document.createElement('button');
         aiToggleBtn.id = 'ai-toggle-btn';
@@ -989,11 +1066,11 @@
             if (currentAiProvider === 'gemini') {
                 currentAiProvider = 'deepseek';
                 aiToggleBtn.innerText = 'IA: DeepSeek';
-                aiToggleBtn.style.color = '#a78bfa'; 
+                aiToggleBtn.style.color = '#a78bfa';
             } else {
                 currentAiProvider = 'gemini';
                 aiToggleBtn.innerText = 'IA: Gemini';
-                aiToggleBtn.style.color = 'rgba(255, 255, 255, 0.6)'; 
+                aiToggleBtn.style.color = 'rgba(255, 255, 255, 0.6)';
             }
             console.log(`Provedor de IA alterado para: ${currentAiProvider}`);
         });
@@ -1018,6 +1095,7 @@
         panel.appendChild(button);
 
         const watermark = document.createElement('div');
+        watermark.id = 'mzzvxm-watermark'; // ID para ocultar
         const githubIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 3c-.58.0-1.25.27-2 1.5c-2.2.86-4.5 1.3-7 1.3-2.5 0-4.7-.44-7-1.3-.75-1.23-1.42-1.5-2-1.5A5.07 5.07 0 0 0 4 4.77 5.44 5.44 0 0 0 2 10.71c0 6.13 3.49 7.34 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
         const instagramIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`;
         watermark.innerHTML = `
@@ -1034,42 +1112,58 @@
         panel.appendChild(watermark);
         document.body.appendChild(panel);
 
+        // --- LÓGICA DE OCULTAR/MOSTRAR (v50) ---
+        const contentToToggle = [
+            'view-raw-response-btn',
+            'ai-toggle-btn',
+            'ai-solver-button',
+            'mzzvxm-watermark'
+        ];
+
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Previne que o clique no botão inicie o arraste
+            const isHidden = toggleBtn.innerText === 'Mostrar';
+            toggleBtn.innerText = isHidden ? 'Ocultar' : 'Mostrar';
+
+            contentToToggle.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.style.display = isHidden ? '' : 'none';
+                }
+            });
+
+            // Re-aplica 'display: none' ao viewResponseBtn se ele já estava oculto
+            if (isHidden && !lastAiResponse) {
+                 document.getElementById('view-raw-response-btn').style.display = 'none';
+            }
+        });
+
+        // --- LÓGICA DE ARRASTAR (v50) ---
+        // A alça é o painel inteiro
+        makeDraggable(panel, panel);
+
         setTimeout(() => {
             panel.style.transform = 'translateY(0)';
             panel.style.opacity = '1';
         }, 100);
-        console.log("Floating Panel do resolvedor v47 (pool de chaves DeepSeek) criado com sucesso!");
+        console.log("Floating Panel do resolvedor v50 criado com sucesso!");
     }
-    
+
     // --- LÓGICA DE DETECÇÃO DE QUIZ ID (v46) ---
 
-    /**
-     * Loga o Quiz ID no console se for um ID novo.
-     * @param {string} id - O quizId de 24 caracteres.
-     * @param {string} source - De onde o ID foi detectado (ex: "URL", "fetch", "XHR").
-     */
     function logQuizId(id, source) {
         if (id === quizIdDetected) {
-            return; // Já detectamos e logamos este ID
+            return;
         }
         quizIdDetected = id;
         console.log(`[Quizizz Bypass] Novo Quiz ID detectado (${source}): %c${id}`, "color: #00FF00; font-weight: bold;");
-        // Futuramente, podemos chamar a função de buscar respostas aqui:
-        // fetchQuizData(id); 
     }
 
-    /**
-     * Tenta encontrar o quizId na URL atual.
-     * @returns {string|null} O ID encontrado ou null.
-     */
     function detectQuizIdFromURL() {
         const match = window.location.pathname.match(regexQuizId);
         return match ? match[1] : null;
     }
 
-    /**
-     * Intercepta a função 'fetch' global para monitorar requisições de rede.
-     */
     function interceptFetch() {
         const originalFetch = window.fetch;
         window.fetch = async function (...args) {
@@ -1085,9 +1179,6 @@
         };
     }
 
-    /**
-     * Intercepta o 'XMLHttpRequest' para monitorar requisições de rede (método antigo).
-     */
     function interceptXHR() {
         const originalOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function (method, url) {
@@ -1102,9 +1193,6 @@
         };
     }
 
-    /**
-     * Função de inicialização para o detector de ID.
-     */
     function initQuizIdDetector() {
         console.log("[Quizizz Bypass] Detector de Quiz ID carregado.");
         const id = detectQuizIdFromURL();
@@ -1119,10 +1207,7 @@
             interceptorsStarted = true;
         }
     }
-    
-    /**
-     * Monitora a navegação em Single Page Applications (SPA).
-     */
+
     (function monitorSPA() {
         const pushState = history.pushState;
         history.pushState = function () {
@@ -1154,7 +1239,7 @@
         try {
             const cacheBustUrl = new URL(url);
             cacheBustUrl.searchParams.set('_t', new Date().getTime());
-            
+
             const r = await fetchWithTimeout(cacheBustUrl.href, { cache: 'no-store' });
             const b = await r.blob();
             return new Promise((res, rej) => {
