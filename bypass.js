@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      52.1
+// @version      52.2
 // @description  Resolve questões do Quizizz
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
@@ -399,7 +399,7 @@
                         currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
                         continue;
                     }
-                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${currentKey}`;
+                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${currentKey}`;
 
                     let promptParts = [{ text: textPrompt }];
 
