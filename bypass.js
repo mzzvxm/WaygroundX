@@ -319,7 +319,7 @@
                         currentApiKeyIndex = (currentApiKeyIndex + 1) % GEMINI_API_KEYS.length;
                         continue;
                     }
-                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`;
+                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${currentKey}`;
 
                     let promptParts = [{ text: textPrompt }];
 
