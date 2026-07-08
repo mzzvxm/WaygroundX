@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Quizizz Bypass
-// @version      52.2
+// @version      53.0
 // @description  Resolve questões do Quizizz
 // @author       mzzvxm
 // @icon         https://tse1.mm.bing.net/th/id/OIP.Ydweh29BuHk_PGD4dGJXbAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3
@@ -351,9 +351,10 @@
         }
         const hasDraggableImages = quizData.questionType === 'match_image_to_text';
 
-        // Verificação de Imagem do DeepSeek
+        // Verificação de Imagem (DeepSeek ou GPT)
         if (currentAiProvider === 'deepseek' && (base64Image || hasDraggableImages)) {
-            console.warn("DeepSeek não suporta imagens. Mostrando aviso...");
+            const modelLabel = DEEPSEEK_MODEL_NAME.includes('gpt') ? 'GPT-120B' : 'DeepSeek';
+            console.warn(`${modelLabel} não suporta imagens. Mostrando aviso...`);
             try {
                 const acaoUsuario = await mostrarAvisoDeepSeekImagem();
                 if (acaoUsuario === 'gemini') {
@@ -365,7 +366,7 @@
                         aiToggleBtn.style.color = 'rgba(255, 255, 255, 0.6)';
                     }
                 } else if (acaoUsuario === 'sem_imagem') {
-                    console.log("Usuário escolheu enviar para o DeepSeek sem a imagem.");
+                    console.log(`Usuário escolheu enviar para o ${modelLabel} sem a imagem.`);
                     base64Image = null;
                     if (quizData.questionType === 'match_image_to_text') {
                         quizData.questionType = 'match_order'; // Downgrade
@@ -1011,6 +1012,7 @@
 
     function mostrarAvisoDeepSeekImagem() {
         return new Promise((resolve, reject) => {
+            const modelLabel = DEEPSEEK_MODEL_NAME.includes('gpt') ? 'GPT-120B' : 'DeepSeek';
             const oldModal = document.getElementById('deepseek-warning-modal');
             if (oldModal) oldModal.remove();
 
@@ -1033,13 +1035,13 @@
             });
 
             const title = document.createElement('h3');
-            title.innerText = '⚠️ DeepSeek Não Vê Imagens';
+            title.innerText = `⚠️ ${modelLabel} Não Vê Imagens`;
             Object.assign(title.style, {
                 margin: '0 0 12px 0', fontSize: '18px', fontWeight: '600'
             });
 
             const message = document.createElement('p');
-            message.innerText = 'Esta pergunta contém uma ou mais imagens que o DeepSeek não pode processar. O que você deseja fazer?';
+            message.innerText = `Esta pergunta contém uma ou mais imagens que o ${modelLabel} não pode processar. O que você deseja fazer?`;
             Object.assign(message.style, {
                 margin: '0 0 20px 0', fontSize: '14px', lineHeight: '1.5',
                 color: 'rgba(255, 255, 255, 0.8)'
@@ -1231,16 +1233,17 @@
             marginBottom: '4px'
         });
         aiToggleBtn.addEventListener('click', () => {
+            const modelLabel = DEEPSEEK_MODEL_NAME.includes('gpt') ? 'GPT' : 'DeepSeek';
             if (currentAiProvider === 'gemini') {
                 currentAiProvider = 'deepseek';
-                aiToggleBtn.innerText = 'IA: DeepSeek';
+                aiToggleBtn.innerText = `IA: ${modelLabel}`;
                 aiToggleBtn.style.color = '#a78bfa';
             } else {
                 currentAiProvider = 'gemini';
                 aiToggleBtn.innerText = 'IA: Gemini';
                 aiToggleBtn.style.color = 'rgba(255, 255, 255, 0.6)';
             }
-            console.log(`Provedor de IA alterado para: ${currentAiProvider}`);
+            console.log(`Provedor de IA alterado para: ${currentAiProvider} (${modelLabel})`);
         });
         panel.appendChild(aiToggleBtn);
 
